@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <string>
 #include <thread>
-#include "board.h"
+#include "Board.h"
 #include "util.h"
 #include "test.h"
 #include <thread>

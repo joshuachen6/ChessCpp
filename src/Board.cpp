@@ -1,4 +1,4 @@
-#include "board.h"
+#include "Board.h"
 #include <iostream>
 #include "test.h"
 #include <unordered_map>
