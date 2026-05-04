@@ -1,217 +1,22 @@
 #include <SFML/Graphics.hpp>
-#include <SFML/Graphics/Color.hpp>
 #include <cstdio>
 #include <iostream>
 #include <unordered_map>
 #include <string>
 #include <thread>
+#include <vector>
 #include "Board.h"
 #include "util.h"
 #include "test.h"
-#include <thread>
+#include "UI.h"
 
-
-int play() {
-	//Testing code for profiling
-	//Start Test
-	//Board* b = new Board();
-	//b = b->get_best(white).first;
-	//cout << "Finished Test" << endl;
-	//return 0;
-	//End Test
-	
-	char c;
-	std::cin >> c;
-	color_t color = c == 'w'? white: black;
-	bool can_move = color == white;
-	std::thread* move_thread;
-
-	int piece_size = 45;
-	int board_size = piece_size * 8;
-	sf::RenderWindow window(sf::VideoMode(board_size, board_size), "chess");
-	sf::Texture* textures[]{
-		load_texture("wp.png"), load_texture("wb.png"), load_texture("wn.png"), load_texture("wr.png"), load_texture("wq.png"), load_texture("wk.png"),
-		load_texture("bp.png"), load_texture("bb.png"), load_texture("bn.png"), load_texture("br.png"), load_texture("bq.png"), load_texture("bk.png")
-	};
-	Board* board = new Board();
-
-	//bot goes first
-	if (color == black) {
-		move_thread = new std::thread(
-			[&]() {
-				board = board->get_best(color == white ? black : white).first;
-				can_move = true;
-				printf("has castled: %d, King moved: %d, rr moved: %d, lr moved: %d\n", board->wcasle, board->wkmove, board->wrrmove, board->wlrmove);
-				double w = board->evaluate(white);
-				std::cout << "-------------------" << std::endl;
-				double b = board->evaluate(black);
-				printf("White value: %f, Black value: %f\n", w, b);
-				if (board->checkmate(white)) {
-					std::cout << "white checkmate" << std::endl;
-				}
-				if (board->checkmate(black)) {
-					std::cout << "black checkmate" << std::endl;
-				} if (board->stalemate()) {
-					std::cout << "stalemate" << std::endl;
-				}
-				std::cout << "%%%%%%%%%%%%%%%%%%%%%%%%%%" << std::endl;
-			}
-		);
-		move_thread->join();
+void delete_chain(Board* b) {
+	while (b) {
+		Board* p = b->previous;
+		delete b;
+		b = p;
 	}
-
-	sf::RectangleShape square(sf::Vector2f(piece_size, piece_size));
-	square.setFillColor(sf::Color(50, 150, 0, 255));
-	sf::CircleShape selection_circle;
-	selection_circle.setRadius(piece_size / 2);
-	selection_circle.setFillColor(sf::Color::Transparent);
-	selection_circle.setOutlineColor(sf::Color::Red);
-	selection_circle.setOutlineThickness(2);
-
-	bool has_selection = false;
-	uint64_t selected = 0;
-
-
-	while (window.isOpen()) {
-		sf::Event event;
-		while (window.pollEvent(event)) {
-			if (event.type == sf::Event::Closed) {
-				window.close();
-			}
-
-			if (event.type == sf::Event::KeyPressed) {
-				if (event.key.code == Keyboard::Z && board->previous->previous) {
-					Board* prev = board->previous;
-					Board* prevprev = prev->previous;
-					delete board;
-					delete prev;
-					board = prevprev;
-				}
-				if (event.key.code == Keyboard::R) {
-					delete board;
-					board = new Board();
-					if (color == black) {
-						move_thread = new std::thread(
-							[&]() {
-								board = board->get_best(color == white ? black : white).first;
-								can_move = true;
-								printf("has castled: %d, King moved: %d, rr moved: %d, lr moved: %d\n", board->wcasle, board->wkmove, board->wrrmove, board->wlrmove);
-								double w = board->evaluate(white);
-								std::cout << "-------------------" << std::endl;
-								double b = board->evaluate(black);
-								printf("White value: %f, Black value: %f\n", w, b);
-								if (board->checkmate(white)) {
-									std::cout << "white checkmate" << std::endl;
-								}
-								if (board->checkmate(black)) {
-									std::cout << "black checkmate" << std::endl;
-								} if (board->stalemate()) {
-									std::cout << "stalemate" << std::endl;
-								}
-								std::cout << "%%%%%%%%%%%%%%%%%%%%%%%%%%" << std::endl;
-							}
-						);
-						move_thread->join();
-					}
-				}
-			}
-
-			if (event.type == sf::Event::MouseButtonPressed) {
-				sf::Vector2i position = Mouse::getPosition(window);
-				int x = (board_size - position.x) / piece_size;
-				int y = (board_size - position.y) / piece_size;
-				if (color == black) {
-					y = 7 - y;
-				}
-				int pos = x + y * 8;
-				uint64_t click_pos = 1ULL << pos;
-				uint64_t selection = 1ULL << selected;
-				uint64_t mask = 0ULL;
-				color == white ? board->get_white(mask) : board->get_black(mask);
-
-				if (has_selection && can_move) {
-					uint64_t moves = 0;
-					board->get_moves(selected, moves);
-					if (moves & click_pos) {
-						Board* next = new Board(board);
-						next->move(selection, click_pos); //selection
-						if (!next->check(color)) {
-							board = next;
-							can_move = false;
-							selected = pos;
-							has_selection = false;
-							//color = color == white ? black : white;
-							move_thread = new std::thread(
-								[&]() {
-									board = board->get_best(color == white ? black : white, Keyboard::isKeyPressed(Keyboard::LShift)).first;
-									can_move = true;
-									printf("has castled: %d, King moved: %d, rr moved: %d, lr moved: %d\n", board->wcasle, board->wkmove, board->wrrmove, board->wlrmove);
-									double w = board->evaluate(white);
-									cout << "-------------------" << endl;
-									double b = board->evaluate(black);
-									printf("White value: %f, Black value: %f\n", w, b);
-									if (board->checkmate(white)) {
-										cout << "white checkmate" << endl;
-									}
-									if (board->checkmate(black)) {
-										cout << "black checkmate" << endl;
-									} if (board->stalemate()) {
-										cout << "stalemate" << endl;
-									}
-									cout << "%%%%%%%%%%%%%%%%%%%%%%%%%%" << endl;
-								}
-							);
-						} else {
-							delete next;
-						}
-						break;
-					}
-				}
-				
-				if (mask & click_pos) {
-					selected = pos;
-					has_selection = mask & selection;
-				}
-			}
-		}
-
-		window.clear(sf::Color::White);
-
-		for (int i = 0; i < 64; i++) {
-			int row = i / 8;
-			int column = i % 8;
-			if (row % 2 == column % 2) {
-				square.setPosition(column * piece_size, color == black ? row * piece_size : board_size - (row + 1) * piece_size);
-				window.draw(square);
-			}
-		}
-
-		for (int i = 0; i < 12; i++) {
-			sf::Texture texture = *textures[i];
-			uint64_t sub = board->board[i];
-			sf::Sprite sprite(texture);
-			for (int j = 0; j < 64; j++) {
-				int row = j / 8;
-				int column = j % 8;
-				if (sub & 1ULL << j) {
-					sprite.setPosition((7-column) * piece_size, color == black? row * piece_size: board_size - (row+1) * piece_size);
-					window.draw(sprite);
-				}
-			}
-		}
-
-		if (has_selection) {
-			int row = selected / 8;
-			int column = selected % 8;
-			selection_circle.setPosition((7-column) * 45, color == black ? row * piece_size : board_size - (row + 1) * piece_size);
-			window.draw(selection_circle);
-		}
-
-		window.display();
-	}
-	return 0;
 }
-
 
 int engine() {
 	char color;
@@ -221,16 +26,13 @@ int engine() {
 	Board* board = new Board();
 
 	while (true) {
-		//Makes the opponent's move
 		board = new Board(board);
 		for (int i = 0; i < 12; i++) {
 			uint64_t value;
-			cin >> value;
+			if (!(cin >> value)) return 0;
 			board->board[i] = value;
 		}
 
-
-		//Moves and transmits back
 		board = board->get_best(engine_color).first;
 		uint64_t prev = 0;
 		engine_color == white ? board->previous->get_white(prev): board->previous->get_black(prev);
@@ -246,8 +48,155 @@ int engine() {
 	}
 }
 
+int play() {
+	UI ui(60);
+	color_t color = white;
+	bool can_move = false;
+	std::thread* move_thread = nullptr;
 
-int main() {
-	//return engine();
+	Board* board = new Board();
+	double current_eval = 0;
+	std::string current_status = "Welcome! Choose side and start.";
+
+	auto start_bot = [&]() {
+		if (move_thread) {
+			if (move_thread->joinable()) move_thread->join();
+			delete move_thread;
+		}
+		move_thread = new std::thread(
+			[&]() {
+				auto best = board->get_best(color == white ? black : white);
+				board = best.first;
+				current_eval = best.second;
+				can_move = true;
+				
+				if (board->checkmate(white)) current_status = "White Checkmate";
+				else if (board->checkmate(black)) current_status = "Black Checkmate";
+				else if (board->stalemate()) current_status = "Stalemate";
+				else current_status = "";
+			}
+		);
+	};
+
+	bool has_selection = false;
+	uint64_t selected = 0;
+
+	while (ui.is_open()) {
+		sf::Event event;
+		while (ui.poll_event(event)) {
+			if (event.type == sf::Event::Closed) {
+				ui.close();
+			}
+
+			if (event.type == sf::Event::MouseButtonPressed && ui.game_started && can_move) {
+				sf::Vector2i position = ui.get_mouse_position();
+				int piece_size = 60;
+				int board_size = piece_size * 8;
+				
+				if (position.x < board_size) { // Only handle clicks on board
+					int x = (board_size - position.x) / piece_size;
+					int y = (board_size - position.y) / piece_size;
+					if (color == black) y = 7 - y;
+					int pos = x + y * 8;
+					uint64_t click_pos = 1ULL << pos;
+					uint64_t mask = 0ULL;
+					color == white ? board->get_white(mask) : board->get_black(mask);
+
+					if (has_selection) {
+						uint64_t moves = 0;
+						board->get_moves(selected, moves);
+						if (moves & click_pos) {
+							Board* next = new Board(board);
+							next->move(1ULL << selected, click_pos);
+							if (!next->check(color)) {
+								board = next;
+								can_move = false;
+								has_selection = false;
+								
+								if (board->checkmate(white)) current_status = "White Checkmate";
+								else if (board->checkmate(black)) current_status = "Black Checkmate";
+								else if (board->stalemate()) current_status = "Stalemate";
+								else {
+									current_status = "Bot thinking...";
+									start_bot();
+								}
+							} else {
+								delete next;
+							}
+						}
+					}
+					
+					if (mask & click_pos) {
+						selected = pos;
+						has_selection = true;
+					} else {
+						has_selection = false;
+					}
+				}
+			}
+		}
+
+		// Handle UI requests
+		if (ui.request_start) {
+			ui.request_start = false;
+			color = ui.selected_side;
+			can_move = (color == white);
+			current_status = (color == white) ? "Your turn (White)" : "Bot thinking...";
+			if (color == black) start_bot();
+		}
+
+		if (ui.request_undo && board->previous && board->previous->previous) {
+			ui.request_undo = false;
+			Board* prev = board->previous;
+			Board* prevprev = prev->previous;
+			board->previous = nullptr;
+			delete board;
+			prev->previous = nullptr;
+			delete prev;
+			board = prevprev;
+			current_status = "Undone.";
+			current_eval = board->evaluate(white) - board->evaluate(black);
+			can_move = true;
+		} else if (ui.request_undo) {
+			ui.request_undo = false;
+		}
+
+		if (ui.request_reset) {
+			ui.request_reset = false;
+			if (move_thread) {
+				if (move_thread->joinable()) move_thread->join();
+				delete move_thread;
+				move_thread = nullptr;
+			}
+			delete_chain(board);
+			board = new Board();
+			can_move = false;
+			current_eval = 0;
+			current_status = "Game reset.";
+			has_selection = false;
+		}
+
+		ui.update(board, color, has_selection, selected, current_eval, current_status);
+		ui.display();
+		
+		if (move_thread && can_move) {
+			if (move_thread->joinable()) move_thread->join();
+			delete move_thread;
+			move_thread = nullptr;
+		}
+	}
+
+	if (move_thread) {
+		if (move_thread->joinable()) move_thread->join();
+		delete move_thread;
+	}
+	delete_chain(board);
+	return 0;
+}
+
+int main(int argc, char** argv) {
+	if (argc > 1 && std::string(argv[1]) == "--engine") {
+		return engine();
+	}
 	return play();
 }

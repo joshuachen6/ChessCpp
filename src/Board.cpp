@@ -61,6 +61,9 @@ Board::Board(Board* previous) {
 	wlrmove = previous->wlrmove;
 }
 
+Board::~Board() {
+}
+
 void Board::get_white(uint64_t& mask) {
 	for (int i = 0; i < 6; i++) {
 		mask |= board[i];
@@ -525,23 +528,21 @@ e:;
 }
 
 bool Board::stalemate() {
-	std::unordered_map<Board*, int> moves;
+	std::vector<std::array<uint64_t, 12>> history;
 	Board* curr = this;
-	do {
-		for (pair<Board* const, int>& entry : moves) {
-			for (int i = 0; i < 12; i++) {
-				if (entry.first->board[i] != curr->board[i]) {
-					moves[curr] = 1;
-					break;
-				}
-				entry.second++;
-				if (entry.second >= 3) {
-					return true;
-				}
+	while (curr) {
+		history.push_back(curr->board);
+		curr = curr->previous;
+	}
+	for (size_t i = 0; i < history.size(); ++i) {
+		int count = 1;
+		for (size_t j = i + 1; j < history.size(); ++j) {
+			if (history[i] == history[j]) {
+				count++;
 			}
 		}
-		curr = curr->previous;
-	} while (curr->previous);
+		if (count >= 3) return true;
+	}
 	return false;
 }
 
@@ -634,6 +635,9 @@ vector<Board*> Board::get_moves(const color_t& color) {
 	std::vector<Board*> move_vec;
 	uint64_t pieces = 0;
 	color == white ? get_white(pieces) : get_black(pieces);
+	uint64_t opponents = 0;
+	color == white ? get_black(opponents) : get_white(opponents);
+
 	int p_leading;
 	while (pieces) {
 		p_leading = std::countr_zero(pieces);
@@ -643,9 +647,14 @@ vector<Board*> Board::get_moves(const color_t& color) {
 		while (moves) {
 			m_leading = std::countr_zero(moves);
 			Board* next = new Board(this);
+			bool is_capture = (1ULL << m_leading) & opponents;
 			next->move(1ULL << p_leading, 1ULL << m_leading);
 			if (!next->check(color)) {
-				move_vec.push_back(next);
+				if (is_capture) {
+					move_vec.insert(move_vec.begin(), next); // Basic move ordering
+				} else {
+					move_vec.push_back(next);
+				}
 			}
 			else {
 				delete next;
@@ -661,16 +670,14 @@ double Board::evaluate(color_t color) {
 	int min;
 	int max;
 	int value = 0;
-	Board* d_board = new Board();
+	static const std::array<uint64_t, 12> default_board = Board().board;
 	uint64_t center_pawns = 103481868288;
 	uint64_t vision = 0;
 	bool castled;
 	bool cc;
 	int target;
-	//double trade = 0; //add the calculation of trades
 	attacked_squares(color, vision);
 
-	uint64_t d_pieces = 0;
 	uint64_t pieces = 0;
 	uint64_t p;
 	uint64_t op_atk = 0;
@@ -680,7 +687,6 @@ double Board::evaluate(color_t color) {
 	if (color == white) {
 		get_white(pieces);
 		attacked_squares(black, op_atk);
-		d_board->get_white(d_pieces);
 		p = board[pawns];
 		center_pawns &= p;
 		min = 0;
@@ -692,7 +698,6 @@ double Board::evaluate(color_t color) {
 	else {
 		get_black(pieces);
 		attacked_squares(white, op_atk);
-		d_board->get_black(d_pieces);
 		p = board[black + pawns];
 		center_pawns &= p;
 		min = 6;
@@ -707,20 +712,17 @@ double Board::evaluate(color_t color) {
 		uint64_t sub = board[i];
 		uint8_t val = value_table[i];
 		uint16_t d = 0;
-		uint64_t developed = (d_board->board[i] ^ sub) & ~d_board->board[i];
+		uint64_t developed = (default_board[i] ^ sub) & ~default_board[i];
 		d += std::popcount(developed & 35604928818740736) * 0.1;
 		d += std::popcount(developed & 66229406269440) * 0.75;
 		development -= std::popcount(op_atk & sub) * std::pow(val, 0.25);
 		development += d / abs(4 * (val - 3.5));
 		value += val * std::popcount(sub);
 	}
-	delete d_board;
 
 	int leading;
 	while (p) {
 		leading = std::countr_zero(p);
-		//check for passed pawns and give points based on travel distance
-		//use an array to hash the lanes
 		int x = leading % 8;
 		uint64_t column = 72340172838076673 << x;
 		int distance = abs(target - (leading >> 3));
@@ -739,92 +741,87 @@ double Board::evaluate(color_t color) {
 }
 
 pair<Board*, double> Board::get_best(const color_t& color, const bool& show) {
-	double alpha = std::numeric_limits<double>::min();
-	double beta = std::numeric_limits<double>::max();
-
 	color_t ocolor = color == white ? black : white;
-	pair<Board*, double> eval;
-	eval.second = numeric_limits<double>::min();
-
 	vector<Board*> moves = get_moves(color);
-	std::unordered_map<Board*, double> results;
+	
+	if (moves.empty()) {
+		return {nullptr, check(color) ? -10000.0 : 0.0};
+	}
 
-	std::for_each(std::execution::par, moves.begin(), moves.end(), [&](Board* move) {
-		results[move] = reval(move, color, ocolor, 1, alpha, beta);
+	std::vector<double> results(moves.size());
+	std::vector<size_t> indices(moves.size());
+	std::iota(indices.begin(), indices.end(), 0);
+
+	std::for_each(std::execution::par, indices.begin(), indices.end(), [&](size_t i) {
+		double alpha = -std::numeric_limits<double>::infinity();
+		double beta = std::numeric_limits<double>::infinity();
+		results[i] = reval(moves[i], color, ocolor, 1, alpha, beta);
 	});
 
-
-	for (const pair<Board*, double> &item : results) {
+	pair<Board*, double> best = {nullptr, -std::numeric_limits<double>::infinity()};
+	for (size_t i = 0; i < moves.size(); ++i) {
 		if (debug && show) {
-			cout << "result: " << item.second;
-			render_board(item.first, item.second);
+			cout << "result: " << results[i] << endl;
+			render_board(moves[i], results[i]);
 		}
-		if (item.second > eval.second) {
-			eval.first = item.first;
-			eval.second = item.second;
+		if (results[i] > best.second) {
+			best.first = moves[i];
+			best.second = results[i];
 		}
 	}
+
+	if (!best.first && !moves.empty()) best.first = moves[0];
 		
 	for (Board* move : moves) {
-		if (move != eval.first) {
+		if (move != best.first) {
 			delete move;
 		}
 	}
-	return eval;
+	return best;
 }
 
 double reval(Board* board, const color_t& og_color, const color_t& curr_color, const int& depth, double alpha, double beta) {
 	color_t opog_color = og_color == white ? black : white;
 	color_t op_color = curr_color == white ? black : white;
-	bool is_color = og_color == curr_color;
-
-	double eval = is_color ? std::numeric_limits<double>::min() : std::numeric_limits<double>::max();
-	vector<Board*> moves = board->get_moves(curr_color);
+	bool is_maximizing = (og_color == curr_color);
 
 	bool check = board->check(curr_color);
+	vector<Board*> moves = board->get_moves(curr_color);
 
-	if (board->stalemate() || (!check && !moves.size())) {
-		return 1;
+	if (moves.empty()) {
+		if (check) {
+			return is_maximizing ? -10000.0 - (EVAL_DEPTH - depth) : 10000.0 + (EVAL_DEPTH - depth);
+		} else {
+			return 0.0;
+		}
 	}
 
-	if (!is_color && !moves.size() && check) {
-		return std::numeric_limits<double>::max();
-	}
-	if (is_color && !moves.size() && check) {
-		return std::numeric_limits<double>::min();
-	}
+	if (board->stalemate()) return 0.0;
 
 	if (depth >= EVAL_DEPTH) {
-		eval = board->evaluate(og_color) / board->evaluate(opog_color);
-		goto e;
+		return board->evaluate(og_color) - board->evaluate(opog_color);
 	}
+
+	double eval = is_maximizing ? -std::numeric_limits<double>::infinity() : std::numeric_limits<double>::infinity();
 
 	for (Board* move : moves) {
 		double result = reval(move, og_color, op_color, depth + 1, alpha, beta);
 
-		if (is_color) {
-			if (result > eval) {
-				eval = result;
-			}
-			if (eval > beta) {
-				goto e;
-			}
-			alpha = max(eval, alpha);
+		if (is_maximizing) {
+			eval = max(eval, result);
+			alpha = max(alpha, eval);
 		}
 		else {
-			if (result < eval) {
-				eval = result;
-			}
-			if (eval < alpha) {
-				goto e;
-			}
-			beta = min(eval, beta);
+			eval = min(eval, result);
+			beta = min(beta, eval);
 		}
+
+		if (beta <= alpha) break;
 	}
 
-e:;
 	for (Board* move : moves) {
 		delete move;
 	}
 	return eval;
 }
+

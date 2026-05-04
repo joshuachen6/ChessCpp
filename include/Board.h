@@ -329,6 +329,8 @@ public:
 
 	vector<Board*> get_moves(const color_t& color);
 
+	~Board();
+
 	void move(const uint64_t& start, const uint64_t& end);
 	double evaluate(color_t color);
 	pair<Board*, double> get_best(const color_t& color, const bool& show=false);
