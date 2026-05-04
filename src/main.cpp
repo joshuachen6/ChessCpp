@@ -1,14 +1,14 @@
 #include <SFML/Graphics.hpp>
+#include <SFML/Graphics/Color.hpp>
+#include <cstdio>
 #include <iostream>
 #include <unordered_map>
 #include <string>
 #include <thread>
-#include "board.h"
+#include "Board.h"
 #include "util.h"
 #include "test.h"
-
-using namespace std;
-using namespace sf;
+#include <thread>
 
 
 int play() {
@@ -21,15 +21,15 @@ int play() {
 	//End Test
 	
 	char c;
-	cin >> c;
+	std::cin >> c;
 	color_t color = c == 'w'? white: black;
 	bool can_move = color == white;
-	thread* move_thread;
+	std::thread* move_thread;
 
 	int piece_size = 45;
 	int board_size = piece_size * 8;
-	RenderWindow window(VideoMode(board_size, board_size), "chess");
-	Texture* textures[]{
+	sf::RenderWindow window(sf::VideoMode(board_size, board_size), "chess");
+	sf::Texture* textures[]{
 		load_texture("wp.png"), load_texture("wb.png"), load_texture("wn.png"), load_texture("wr.png"), load_texture("wq.png"), load_texture("wk.png"),
 		load_texture("bp.png"), load_texture("bb.png"), load_texture("bn.png"), load_texture("br.png"), load_texture("bq.png"), load_texture("bk.png")
 	};
@@ -37,35 +37,35 @@ int play() {
 
 	//bot goes first
 	if (color == black) {
-		move_thread = new thread(
+		move_thread = new std::thread(
 			[&]() {
 				board = board->get_best(color == white ? black : white).first;
 				can_move = true;
 				printf("has castled: %d, King moved: %d, rr moved: %d, lr moved: %d\n", board->wcasle, board->wkmove, board->wrrmove, board->wlrmove);
 				double w = board->evaluate(white);
-				cout << "-------------------" << endl;
+				std::cout << "-------------------" << std::endl;
 				double b = board->evaluate(black);
 				printf("White value: %f, Black value: %f\n", w, b);
 				if (board->checkmate(white)) {
-					cout << "white checkmate" << endl;
+					std::cout << "white checkmate" << std::endl;
 				}
 				if (board->checkmate(black)) {
-					cout << "black checkmate" << endl;
+					std::cout << "black checkmate" << std::endl;
 				} if (board->stalemate()) {
-					cout << "stalemate" << endl;
+					std::cout << "stalemate" << std::endl;
 				}
-				cout << "%%%%%%%%%%%%%%%%%%%%%%%%%%" << endl;
+				std::cout << "%%%%%%%%%%%%%%%%%%%%%%%%%%" << std::endl;
 			}
 		);
 		move_thread->join();
 	}
 
-	RectangleShape square(Vector2f(piece_size, piece_size));
-	square.setFillColor(Color(50, 150, 0, 255));
-	CircleShape selection_circle;
+	sf::RectangleShape square(sf::Vector2f(piece_size, piece_size));
+	square.setFillColor(sf::Color(50, 150, 0, 255));
+	sf::CircleShape selection_circle;
 	selection_circle.setRadius(piece_size / 2);
-	selection_circle.setFillColor(Color::Transparent);
-	selection_circle.setOutlineColor(Color::Red);
+	selection_circle.setFillColor(sf::Color::Transparent);
+	selection_circle.setOutlineColor(sf::Color::Red);
 	selection_circle.setOutlineThickness(2);
 
 	bool has_selection = false;
@@ -73,13 +73,13 @@ int play() {
 
 
 	while (window.isOpen()) {
-		Event event;
+		sf::Event event;
 		while (window.pollEvent(event)) {
-			if (event.type == Event::Closed) {
+			if (event.type == sf::Event::Closed) {
 				window.close();
 			}
 
-			if (event.type == Event::KeyPressed) {
+			if (event.type == sf::Event::KeyPressed) {
 				if (event.key.code == Keyboard::Z && board->previous->previous) {
 					Board* prev = board->previous;
 					Board* prevprev = prev->previous;
@@ -91,24 +91,24 @@ int play() {
 					delete board;
 					board = new Board();
 					if (color == black) {
-						move_thread = new thread(
+						move_thread = new std::thread(
 							[&]() {
 								board = board->get_best(color == white ? black : white).first;
 								can_move = true;
 								printf("has castled: %d, King moved: %d, rr moved: %d, lr moved: %d\n", board->wcasle, board->wkmove, board->wrrmove, board->wlrmove);
 								double w = board->evaluate(white);
-								cout << "-------------------" << endl;
+								std::cout << "-------------------" << std::endl;
 								double b = board->evaluate(black);
 								printf("White value: %f, Black value: %f\n", w, b);
 								if (board->checkmate(white)) {
-									cout << "white checkmate" << endl;
+									std::cout << "white checkmate" << std::endl;
 								}
 								if (board->checkmate(black)) {
-									cout << "black checkmate" << endl;
+									std::cout << "black checkmate" << std::endl;
 								} if (board->stalemate()) {
-									cout << "stalemate" << endl;
+									std::cout << "stalemate" << std::endl;
 								}
-								cout << "%%%%%%%%%%%%%%%%%%%%%%%%%%" << endl;
+								std::cout << "%%%%%%%%%%%%%%%%%%%%%%%%%%" << std::endl;
 							}
 						);
 						move_thread->join();
@@ -116,8 +116,8 @@ int play() {
 				}
 			}
 
-			if (event.type == Event::MouseButtonPressed) {
-				Vector2i position = Mouse::getPosition(window);
+			if (event.type == sf::Event::MouseButtonPressed) {
+				sf::Vector2i position = Mouse::getPosition(window);
 				int x = (board_size - position.x) / piece_size;
 				int y = (board_size - position.y) / piece_size;
 				if (color == black) {
@@ -141,7 +141,7 @@ int play() {
 							selected = pos;
 							has_selection = false;
 							//color = color == white ? black : white;
-							move_thread = new thread(
+							move_thread = new std::thread(
 								[&]() {
 									board = board->get_best(color == white ? black : white, Keyboard::isKeyPressed(Keyboard::LShift)).first;
 									can_move = true;
@@ -175,7 +175,7 @@ int play() {
 			}
 		}
 
-		window.clear(Color::White);
+		window.clear(sf::Color::White);
 
 		for (int i = 0; i < 64; i++) {
 			int row = i / 8;
@@ -187,9 +187,9 @@ int play() {
 		}
 
 		for (int i = 0; i < 12; i++) {
-			Texture texture = *textures[i];
+			sf::Texture texture = *textures[i];
 			uint64_t sub = board->board[i];
-			Sprite sprite(texture);
+			sf::Sprite sprite(texture);
 			for (int j = 0; j < 64; j++) {
 				int row = j / 8;
 				int column = j % 8;
@@ -215,7 +215,7 @@ int play() {
 
 int engine() {
 	char color;
-	cin >> color;
+	std::cin >> color;
 	color_t engine_color = color == 'w' ? white : black;
 
 	Board* board = new Board();
@@ -238,16 +238,16 @@ int engine() {
 		engine_color == white ? board->get_white(curr) : board->get_black(curr);
 
 		uint64_t diff = prev ^ curr;
-		int start = countr_zero(prev & diff);
-		int end = countr_zero(curr & diff);
+		int start = std::countr_zero(prev & diff);
+		int end = std::countr_zero(curr & diff);
 
-		cout << to_string(start) << endl;
-		cout << to_string(end) << endl;
+		std::cout << to_string(start) << std::endl;
+		std::cout << to_string(end) << std::endl;
 	}
 }
 
 
-int main(int argc, char* args[]) {
+int main() {
 	//return engine();
 	return play();
 }

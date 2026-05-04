@@ -1,9 +1,12 @@
-#include "board.h"
+#include "Board.h"
 #include <iostream>
 #include "test.h"
-#include <ppl.h>
-#include <concurrent_unordered_map.h>
-#include <map>
+#include <unordered_map>
+#include <limits>
+#include <bit>
+#include <algorithm>
+#include <cmath>
+#include <execution>
 
 using namespace std;
 
@@ -306,8 +309,8 @@ void Board::rank_attack(const uint8_t& position, uint64_t& mask) {
 	uint8_t rank = line ^ a >> y;
 	uint8_t right = rank & (uint8_t)(line >> 8 - x);
 	uint8_t left = rank & (uint8_t)(line << x + 1);
-	uint8_t rfirst = countl_one((uint8_t)(right << 8 - x));
-	uint8_t lfirst = countr_one((uint8_t)(left >> x + 1));
+	uint8_t rfirst = std::countl_one((uint8_t)(right << 8 - x));
+	uint8_t lfirst = std::countr_one((uint8_t)(left >> x + 1));
 
 	left &= line >> (7 - x - lfirst);
 	left |= (pos_line << lfirst + 1) & o;
@@ -433,7 +436,7 @@ void Board::get_attackers(const uint8_t& position, uint64_t& mask) {
 
 	int leading;
 	while (o) {
-		leading = countr_zero(o);
+		leading = std::countr_zero(o);
 		uint64_t moves = 0;
 		get_attacks(leading, moves);
 		if (moves & pos) {
@@ -464,7 +467,7 @@ void Board::attacked_squares(const color_t& color, uint64_t& mask) {
 	color == white ? get_white(a) : get_black(a);
 	int leading;
 	while (a) {
-		leading = countr_zero(a);
+		leading = std::countr_zero(a);
 		uint64_t moves = 0;
 		get_attacks(leading, moves);
 		mask |= moves;
@@ -473,7 +476,7 @@ void Board::attacked_squares(const color_t& color, uint64_t& mask) {
 }
 
 bool Board::check(const color_t& color) {
-	uint64_t king_pos = color == white ? countr_zero(board[kings]) : countr_zero(board[black + kings]);
+	uint64_t king_pos = color == white ? std::countr_zero(board[kings]) : std::countr_zero(board[black + kings]);
 	uint64_t attackers = 0;
 	get_attackers(king_pos, attackers);
 	return attackers;
@@ -522,7 +525,7 @@ e:;
 }
 
 bool Board::stalemate() {
-	unordered_map<Board*, int> moves;
+	std::unordered_map<Board*, int> moves;
 	Board* curr = this;
 	do {
 		for (pair<Board* const, int>& entry : moves) {
@@ -633,12 +636,12 @@ vector<Board*> Board::get_moves(const color_t& color) {
 	color == white ? get_white(pieces) : get_black(pieces);
 	int p_leading;
 	while (pieces) {
-		p_leading = countr_zero(pieces);
+		p_leading = std::countr_zero(pieces);
 		uint64_t moves = 0;
 		get_moves(p_leading, moves);
 		int m_leading;
 		while (moves) {
-			m_leading = countr_zero(moves);
+			m_leading = std::countr_zero(moves);
 			Board* next = new Board(this);
 			next->move(1ULL << p_leading, 1ULL << m_leading);
 			if (!next->check(color)) {
@@ -705,17 +708,17 @@ double Board::evaluate(color_t color) {
 		uint8_t val = value_table[i];
 		uint16_t d = 0;
 		uint64_t developed = (d_board->board[i] ^ sub) & ~d_board->board[i];
-		d += popcount(developed & 35604928818740736) * 0.1;
-		d += popcount(developed & 66229406269440) * 0.75;
-		development -= popcount(op_atk & sub) * pow(val, 0.25);
+		d += std::popcount(developed & 35604928818740736) * 0.1;
+		d += std::popcount(developed & 66229406269440) * 0.75;
+		development -= std::popcount(op_atk & sub) * std::pow(val, 0.25);
 		development += d / abs(4 * (val - 3.5));
-		value += val * popcount(sub);
+		value += val * std::popcount(sub);
 	}
 	delete d_board;
 
 	int leading;
 	while (p) {
-		leading = countr_zero(p);
+		leading = std::countr_zero(p);
 		//check for passed pawns and give points based on travel distance
 		//use an array to hash the lanes
 		int x = leading % 8;
@@ -732,21 +735,21 @@ double Board::evaluate(color_t color) {
 		p -= 1ULL << leading;
 	}
 
-	return value + development + popcount(center_pawns) * 0.5 + popcount(vision) * 0.05 + (cc ? 0 : (castled ? 1 : -1));
+	return value + development + std::popcount(center_pawns) * 0.5 + std::popcount(vision) * 0.05 + (cc ? 0 : (castled ? 1 : -1));
 }
 
 pair<Board*, double> Board::get_best(const color_t& color, const bool& show) {
-	double alpha = numeric_limits<double>::min();
-	double beta = numeric_limits<double>::max();
+	double alpha = std::numeric_limits<double>::min();
+	double beta = std::numeric_limits<double>::max();
 
 	color_t ocolor = color == white ? black : white;
 	pair<Board*, double> eval;
 	eval.second = numeric_limits<double>::min();
 
 	vector<Board*> moves = get_moves(color);
-	concurrency::concurrent_unordered_map<Board*, double> results;
+	std::unordered_map<Board*, double> results;
 
-	concurrency::parallel_for_each(moves.begin(), moves.end(), [&](Board* move) {
+	std::for_each(std::execution::par, moves.begin(), moves.end(), [&](Board* move) {
 		results[move] = reval(move, color, ocolor, 1, alpha, beta);
 	});
 
@@ -775,7 +778,7 @@ double reval(Board* board, const color_t& og_color, const color_t& curr_color, c
 	color_t op_color = curr_color == white ? black : white;
 	bool is_color = og_color == curr_color;
 
-	double eval = is_color ? numeric_limits<double>::min() : numeric_limits<double>::max();
+	double eval = is_color ? std::numeric_limits<double>::min() : std::numeric_limits<double>::max();
 	vector<Board*> moves = board->get_moves(curr_color);
 
 	bool check = board->check(curr_color);
@@ -785,10 +788,10 @@ double reval(Board* board, const color_t& og_color, const color_t& curr_color, c
 	}
 
 	if (!is_color && !moves.size() && check) {
-		return numeric_limits<double>::max();
+		return std::numeric_limits<double>::max();
 	}
 	if (is_color && !moves.size() && check) {
-		return numeric_limits<double>::min();
+		return std::numeric_limits<double>::min();
 	}
 
 	if (depth >= EVAL_DEPTH) {
