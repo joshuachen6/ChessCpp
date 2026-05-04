@@ -1,6 +1,8 @@
 # ChessCpp
 A chess engine written in C++ using SFML and ImGui.
 
+<img width="737" height="669" alt="Screenshot_20260504_090517" src="https://github.com/user-attachments/assets/3d9fb1ae-3c9b-46fb-852c-40e5500f3231" />
+
 ## Features
 - Bitboard-based board representation
 - Minimax search with Alpha-Beta pruning
