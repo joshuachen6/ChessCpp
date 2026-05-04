@@ -1,7 +1,0 @@
-{
-    cmdlines = {
-        "xmake -y",
-        "xmake lua /home/jchen/.local/share/xmake/modules/private/utils/statistics.lua --yes",
-        "xmake lua /home/jchen/.local/share/xmake/actions/build/cleaner.lua --yes"
-    }
-}
