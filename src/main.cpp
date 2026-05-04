@@ -80,6 +80,7 @@ int play() {
 
 	bool has_selection = false;
 	uint64_t selected = 0;
+	uint64_t current_possible_moves = 0;
 
 	while (ui.is_open()) {
 		sf::Event event;
@@ -90,12 +91,12 @@ int play() {
 
 			if (event.type == sf::Event::MouseButtonPressed && ui.game_started && can_move) {
 				sf::Vector2i position = ui.get_mouse_position();
-				int piece_size = 60;
-				int board_size = piece_size * 8;
+				float piece_size = ui.get_piece_size();
+				float board_size = piece_size * 8;
 				
 				if (position.x < board_size) { // Only handle clicks on board
-					int x = (board_size - position.x) / piece_size;
-					int y = (board_size - position.y) / piece_size;
+					int x = (int)((board_size - (float)position.x) / piece_size);
+					int y = (int)((board_size - (float)position.y) / piece_size);
 					if (color == black) y = 7 - y;
 					int pos = x + y * 8;
 					uint64_t click_pos = 1ULL << pos;
@@ -103,15 +104,14 @@ int play() {
 					color == white ? board->get_white(mask) : board->get_black(mask);
 
 					if (has_selection) {
-						uint64_t moves = 0;
-						board->get_moves(selected, moves);
-						if (moves & click_pos) {
+						if (current_possible_moves & click_pos) {
 							Board* next = new Board(board);
 							next->move(1ULL << selected, click_pos);
 							if (!next->check(color)) {
 								board = next;
 								can_move = false;
 								has_selection = false;
+								current_possible_moves = 0;
 								
 								if (board->checkmate(white)) current_status = "White Checkmate";
 								else if (board->checkmate(black)) current_status = "Black Checkmate";
@@ -129,8 +129,11 @@ int play() {
 					if (mask & click_pos) {
 						selected = pos;
 						has_selection = true;
+						current_possible_moves = 0;
+						board->get_moves(selected, current_possible_moves);
 					} else {
 						has_selection = false;
+						current_possible_moves = 0;
 					}
 				}
 			}
@@ -157,6 +160,8 @@ int play() {
 			current_status = "Undone.";
 			current_eval = board->evaluate(white) - board->evaluate(black);
 			can_move = true;
+			has_selection = false;
+			current_possible_moves = 0;
 		} else if (ui.request_undo) {
 			ui.request_undo = false;
 		}
@@ -174,9 +179,10 @@ int play() {
 			current_eval = 0;
 			current_status = "Game reset.";
 			has_selection = false;
+			current_possible_moves = 0;
 		}
 
-		ui.update(board, color, has_selection, selected, current_eval, current_status);
+		ui.update(board, color, has_selection, selected, current_possible_moves, current_eval, current_status);
 		ui.display();
 		
 		if (move_thread && can_move) {
