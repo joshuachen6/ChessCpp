@@ -36,25 +36,24 @@ UI::~UI() {
 }
 
 void UI::handle_resize(unsigned int width, unsigned int height) {
-    float A = (float)width * (float)height;
+    float area = (float)width * (float)height;
     float R = target_aspect_ratio;
-    
-    unsigned int new_height = static_cast<unsigned int>(std::sqrt(A / R));
-    unsigned int new_width = static_cast<unsigned int>((float)new_height * R);
 
-    // Only set size if it actually changed to avoid infinite resize loops
+    float h = std::sqrt(area / R);
+    float w = h * R;
+
+    unsigned int new_width = static_cast<unsigned int>(std::round(w));
+    unsigned int new_height = static_cast<unsigned int>(std::round(h));
+
     if (new_width != width || new_height != height) {
         window.setSize(sf::Vector2u(new_width, new_height));
-        return; // setSize will trigger another Resize event
     }
 
-    // Update internal metrics
-    sf::Vector2u size = window.getSize();
-    board_size = (float)size.y;
+    board_size = (float)new_height;
     piece_size = board_size / 8.0f;
-    sidebar_width = (float)size.x - board_size;
+    sidebar_width = (float)new_width - board_size;
 
-    sf::View view(sf::FloatRect(0, 0, (float)size.x, (float)size.y));
+    sf::View view(sf::FloatRect(0, 0, (float)new_width, (float)new_height));
     window.setView(view);
 
     square.setSize(sf::Vector2f(piece_size, piece_size));
